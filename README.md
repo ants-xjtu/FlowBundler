@@ -1,5 +1,7 @@
 # FlowBundler
-FlowBundler is a high speed software traffic shaping / rate-limiting / pacing scheme. It achieves high-efficient traffic shaping by batching packets from different flows. More details of FlowBundler can be found in our INFOCOM'23 paper "Burst can be Harmless: Achieving Line-rate Software Traffic Shaping by Inter-flow Batching".
+FlowBundler is a high speed software traffic shaping (aka, rate-limiting or pacing) scheme.
+
+ It achieves high-efficient traffic shaping by batching packets from different flows. More details of FlowBundler can be found in our INFOCOM'23 paper "Burst can be Harmless: Achieving Line-rate Software Traffic Shaping by Inter-flow Batching".
 
 This repo contains our kernel and userspace implementations of FlowBundler prototype.
 
@@ -35,9 +37,13 @@ where `DEVICE_NAME` is the name of network device (e.g., `eth0`) to enable FlowB
 
 #### Note
 
-In our kernel implementation, we take advantage of [Early Departure Time (EDT) model](https://lwn.net/Articles/766564/). In other words, we assume that the expected departure time of a packet has already been determined when the packet arrives at the kernel module.
+In our kernel implementation, we take advantage of [Early Departure Time (EDT) model](https://lwn.net/Articles/766564/) to achieve rate-limiting. In other words, we assume that the expected departure time of a packet has already been determined when the packet arrives at the kernel module.
 
-Thus, to make our kernel module work correctly, one may need to explictly specify pacing rate in their applications. For `iperf3`, one needs to set the `--fq-rate` parameter. For customized applications, one needs to set the `SO_MAX_PACING_RATE` socket option.
+Thus, to make our kernel module work correctly, one may need to explictly specify pacing rate in their applications.
+
+For `iperf3`, one needs to set the `--fq-rate` parameter.
+
+For customized applications, one needs to set the `SO_MAX_PACING_RATE` socket option.
 
 ### BESS
 
