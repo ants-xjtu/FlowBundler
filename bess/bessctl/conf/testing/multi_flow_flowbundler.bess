@@ -1,0 +1,49 @@
+import scapy.all as scapy
+from random import randint
+import socket
+import math
+
+flows = []
+
+# 1. Set parameters for generating packets
+#   flow_num: number of concurrent flows;
+#   max_aggregation_rate: The total speed of all flows;
+#   max_pkts_kbytes: The maximum number of bytes stored in the queue for each flow;
+flow_num, max_aggregation_rate = 100, 1000000  # Kbps
+max_pkts_kbytes = 10  # KBytes
+
+
+def gen_udp_packet(proto, src_ip, dst_ip, src_port, dst_port, pkt_len):
+    eth = scapy.Ether(src='02:1e:67:9f:4d:ae', dst='06:16:3e:1b:72:32')
+    ip = scapy.IP(src=src_ip, dst=dst_ip)
+    udp = proto(sport=src_port, dport=dst_port)
+    header = eth / ip / udp
+    # payload = 'h' * (pkt_len - len(header))
+    # pkt = header / payload
+    return bytes(header)
+
+
+
+packet = gen_udp_packet(scapy.UDP, "172.0.0.1", "172.0.0.2", 0, 0, 1500)
+
+# 2. bind dpdk port
+DC4_PORT0::PMDPort(port_id=0, num_inc_q=1, num_out_q=1)
+
+# 3. create FlowBundler module in BESS pipelines
+#   bucket_num_scale: Determine the number of timing wheel for the FlowBundler, 10 means 2^10;
+#   min_gran_scale: Determine the minimum granularity in nanoseconds, 0 means 2^0(ns);
+#   dequeue_burst: The maximum number of packets dequeued at one time;
+#   mempool_size: The number of elements in the memory pool;
+#   generate_burst: The maximum number of packets generated at one time;
+#   max_pkts_kbytes: The maximum number of bytes stored in the queue for each flow;
+#   templates: package template
+fb = FlowBundler(bucket_num_scale=10, min_gran_scale=0, dequeue_burst=32, mempool_size=30000, generate_burst=32,
+               max_pkts_kbytes=max_pkts_kbytes, templates=packet, port=DC4_PORT0, qid=0)
+fb.set_default_rate(default_rate=500)
+fb.add_flow(total_rate=max_aggregation_rate, flow_num=flow_num, flows = flows, flows_per_dst = 1)
+
+# bess.add_tc('slow', policy='rate_limit', resource='count', limit={'count': 100000})
+# fb.attach_task('slow')
+
+
+

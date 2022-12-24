@@ -1,0 +1,4 @@
+p0::PMDPort(port_id=0, num_inc_q=1, num_out_q=1)
+input::PortInc(port=p0)
+input.set_burst(burst=32)
+input->Sink()

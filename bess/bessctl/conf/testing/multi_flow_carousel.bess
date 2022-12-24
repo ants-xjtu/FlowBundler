@@ -1,0 +1,42 @@
+import scapy.all as scapy
+from random import randint
+import socket
+import math
+
+flows = []
+flow_num, max_aggregation_rate = 1000, 50000  # Kbps
+max_pkts_kbytes = 12  # KBytes
+
+
+def gen_udp_packet(proto, src_ip, dst_ip, src_port, dst_port, pkt_len):
+    eth = scapy.Ether(src='02:1e:67:9f:4d:ae', dst='06:16:3e:1b:72:32')
+    ip = scapy.IP(src=src_ip, dst=dst_ip)
+    udp = proto(sport=src_port, dport=dst_port)
+    header = eth / ip / udp
+    # payload = 'h' * (pkt_len - len(header))
+    # pkt = header / payload
+    return bytes(header)
+
+
+def generate_random_flows(flow_num, pkt_len):
+    rate_ = int(max_aggregation_rate / flow_num)
+    for i in range(flow_num):
+        src_ip = "172." + ".".join(map(str, (randint(0, 255) for _ in range(3))))
+        dst_ip = "172." + ".".join(map(str, (randint(0, 255) for _ in range(3))))
+        src_port = i # src_port will be used to find flow-info in eiffel.cc
+        dst_port = randint(1, 65535)
+        flows.append({'src_ip': src_ip, 'dst_ip': dst_ip, 'src_port': src_port, 'dst_port': dst_port, 'rate': rate_})
+
+
+packet = gen_udp_packet(scapy.UDP, "172.0.0.1", "172.0.0.2", 0, 0, 1500)
+# generate_random_flows(flow_num=flow_num, pkt_len=1500)
+
+DC4_PORT0::PMDPort(port_id=0, num_inc_q=1, num_out_q=1)
+# DC4_PORT0_OUTPUT::QueueOut(port = DC4_PORT0, qid=0)
+
+ca = Carousel(granularity=300, slots=33333333, size=100000, generate_burst=32, max_pkts_kbytes=max_pkts_kbytes,
+               templates=packet, port=DC4_PORT0, qid=0)
+ca.set_default_rate(default_rate=500)
+ca.add_flow(total_rate=max_aggregation_rate, flow_num=flow_num, flows = flows, flows_per_dst = 1)
+ca.set_max_dequeue_burst(max_dequeue_burst=32)
+

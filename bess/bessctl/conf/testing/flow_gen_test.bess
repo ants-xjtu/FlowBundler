@@ -1,0 +1,22 @@
+import scapy.all as scapy
+
+# 'show module' command shows detailed stats/parameters
+
+pkt_size = 1500
+
+eth = scapy.Ether(src='02:1e:67:9f:4d:ae', dst='06:16:3e:1b:72:32')
+ip = scapy.IP(src='10.0.0.1', dst='10.0.0.2')   # dst IP is overwritten
+tcp = scapy.TCP(sport=10001, dport=10002)
+payload = ('hello' + '0123456789' * 200)[:pkt_size-len(eth/ip/tcp)]
+pkt = eth/ip/tcp/payload
+pkt_data = bytes(pkt)
+
+# NOTE: without quick_rampup=1, it takes a while to converge to
+# the desied load level, especially when flow duration is pareto distribution
+
+DC4_PORT0::PMDPort(port_id=0, num_inc_q=1, num_out_q=1)
+DC4_PORT0_OUTPUT::QueueOut(port = DC4_PORT0, qid=0)
+fg = FlowGen(template=pkt_data, pps=1e6, flow_rate = 1e4, flow_duration = 10.0, \
+             arrival='uniform', duration='uniform', quick_rampup=True, port_dst_range=10000)
+fg.set_burst(burst = 32)
+fg-> DC4_PORT0_OUTPUT
