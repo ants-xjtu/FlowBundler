@@ -3,7 +3,7 @@ set -eu
 
 SCRIPTPATH="$(cd "$(dirname ${BASH_SOURCE[0]})" && pwd)"
 
-. ../lib/utils.sh
+. $SCRIPTPATH/../lib/utils.sh
 
 SCHNAME='dfb'
 MODNAME="sch_$SCHNAME"
