@@ -3,14 +3,13 @@ These are source code of eiffel.
 
 The [eiffel implementation provided by Saeed](https://github.com/saeed/eiffel_linux)
 modifies the kernel source code.
-Enabling Eiffel needs to re-compile the kernel source,
+As a result, enabling Eiffel needs to re-compile the kernel source,
 which is a tedious work.
 
-For Linux kernel >= 4.22, it is unnecessary.
-With the [Early Departure Time module](https://lwn.net/Articles/766564/),
-we only need to add a new qdisc.
+From Linux kernel >= 4.22, I find that it becomes unnecessary
+with [Early Departure Time model](https://lwn.net/Articles/766564/).
 
-Therefore, I adapt the source code 
+Therefore, I adapt the origin source code so that it only needs to insert a kernel module to enable Eiffel.
 
 ## Environments
 - Ubuntu 18.04.3 with Linux 5.3.0-24.

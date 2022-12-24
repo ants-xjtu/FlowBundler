@@ -33,9 +33,15 @@ where `DEVICE_NAME` is the name of network device (e.g., `eth0`) to enable FlowB
 ./kernel/sch_dfb/disable-sch.sh
 ```
 
+#### Note
+
+In our kernel implementation, we take advantage of [Early Departure Time (EDT) model](https://lwn.net/Articles/766564/). In other words, we assume that the expected departure time of a packet has already been determined when the packet arrives at the kernel module.
+
+Thus, to make our kernel module work correctly, one may need to explictly specify pacing rate in their applications. For `iperf3`, one needs to set the `--fq-rate` parameter. For customized applications, one needs to set the `SO_MAX_PACING_RATE` socket option.
+
 ### BESS
 
-See [README](bess/README.md).
+See [README](bess/README.md)
 
 ## Contact
 
