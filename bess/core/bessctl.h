@@ -31,10 +31,13 @@
 #define BESS_BESSCTL_H_
 
 #include <string>
+#include <grpc++/server.h>
+#include <grpc++/server_builder.h>
+#include <grpc++/server_context.h>
 
-namespace grpc {
-class ServerBuilder;
-}  // namespace grpc
+// namespace grpc {
+// class ServerBuilder;
+// }  // namespace grpc
 
 // gRPC server encapsulation. Usage:
 //   ApiServer server;
