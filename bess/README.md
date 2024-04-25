@@ -35,29 +35,32 @@ The directory structure is as follows:
 
 # How to use
 
+## Requirements
+- Python 3.9 with `protobuf`, `grpcio`, `scapy`
+
 ## Build BESS
+Enter the project root directory and execute the build script
+
+```bash
+./build.py
+```
+
+## Prepare DPDK environment
 
 The dpdk environment should be prepared in advance, the recommended dpdk version is 20.11.3. 
 
 1. Bind network port to dpdk driver
 
-```Bash
+```bash
 sudo ./dpdk-devbind -b 01:00.0 vfio-pci
 ```
 
 2. Set up hugepages
 
-```Bash
+```bash
  sudo ./dpdk-hugepages.py --setup 2G
 ```
 
-3. Build BESS
-
-Enter the project root directory and execute the build script
-
-```Bash
-./build.py
-```
 
 ## Run test scripts
 
@@ -65,24 +68,24 @@ There are already written scripts for testing in the ***bessctl/conf/testing*** 
 
 1. Execute bessctl
 
-```Bash
+```bash
 ./bessctl
 ```
 
 2. Start daemon
 
-```Bash
+```bash
 daemon start
 ```
 
 3. Run the bess script
 
-```Bash
+```bash
 run testing/multi_flow_flowbundler
 ```
 
 4. Stop run bess script
 
-```Bash
+```bash
 daemon stop
 ```
