@@ -299,7 +299,7 @@ def build_dpdk():
         cmd('patch -d %s -N -p1 < %s || true' % (DPDK_DIR, f), shell=True)
 
     print('Building DPDK...')
-    cmd('ninja -C %s install' % DPDK_BUILD)
+    cmd('sudo ninja -C %s install' % DPDK_BUILD)
 
 
 def generate_protobuf_files():
