@@ -47,12 +47,12 @@ Enter the project root directory and execute the build script
 
 ## Prepare DPDK environment
 
-The dpdk environment should be prepared in advance, the recommended dpdk version is 20.11.3. 
+The dpdk environment should be prepared in advance, the recommended dpdk version is 20.11.3.
 
 1. Bind network port to dpdk driver
 
 ```bash
-sudo ./dpdk-devbind -b 01:00.0 vfio-pci
+sudo ./dpdk-devbind -b vfio-pci 01:00.0
 ```
 
 2. Set up hugepages
