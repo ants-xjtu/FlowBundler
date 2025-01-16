@@ -421,7 +421,7 @@ static int dfb_segment(struct sk_buff *skb, struct Qdisc *sch,
         return qdisc_drop(skb, sch, to_free);
     }
 
-    if(query_congestion(q,skb))
+    if(query_congestion(q, skb))
         qid = dfb_find_queue_index(q->cong_rate);
     else
         qid = dfb_find_queue_index(rate);
@@ -484,13 +484,13 @@ static int dfb_enqueue(struct sk_buff *skb, struct Qdisc *sch,
             skb->len, rate / MILLION, rate % MILLION
         );
 #endif
-        update_congestion(q,skb);
+        update_congestion(q, skb);
         // skb->skb_mstamp_ns = max_t(u64, *prev_ts, skb->skb_mstamp_ns);
         if (gso_split && skb_is_gso(skb)) {
             ret = dfb_segment(skb, sch, to_free);
             goto dfb_enqueue_done;
         }
-        if(query_congestion(q,skb))
+        if(query_congestion(q, skb))
             qid = dfb_find_queue_index(q->cong_rate);
         else
             qid = dfb_find_queue_index(rate);
