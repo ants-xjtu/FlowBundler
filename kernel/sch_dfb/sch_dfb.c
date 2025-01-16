@@ -15,6 +15,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/bitops.h>
+#include <linux/jhash.h>
 #include <net/netlink.h>
 #include <net/sch_generic.h>
 #include <net/pkt_sched.h>
@@ -22,6 +23,8 @@
 #define DFB_DEBUG 0
 #define DFB_PROFILE 0
 
+#define HASHTABLE_SIZE_SCALE 8
+#define HASHTABLE_SIZE (1 << HASHTABLE_SIZE_SCALE)
 // scaling factor of bucket number
 #define BUCKET_NUM_SCALE 10
 #define BUCKET_NUM (1 << BUCKET_NUM_SCALE)
@@ -59,6 +62,12 @@ struct dfb_sched_data {
     // the queue id with the highest pacing rate among all active flows
     u8 highest_rate_qid;
     u8 real_qid_cache[QUEUE_NUM][BUCKET_NUM];
+    u8 hash_table[HASHTABLE_SIZE];
+    u8 deq_rst;
+    u32 n_cong_flows;
+    u32 deq_cnt;
+    u64 deq_time;
+    u64 cong_rate;
 #if DFB_PROFILE
     u64 enqueue_cycles;
     u64 dequeue_cycles;
@@ -110,6 +119,103 @@ static inline void dfb_get_flow_info(struct sk_buff *skb, char *buff, size_t len
             ntohl(tcph->seq)
         );
     }
+}
+
+static inline u32 flow_hash(struct sk_buff *skb) {
+    u32 hash = 0;
+    u32 key[3] = {0}; // Array to store source IP, destination IP, (source port<<16)|destination port
+    struct iphdr *iph = NULL;
+    struct tcphdr *tcph = NULL;
+    __be16 src_port = 0, dst_port = 0;
+
+    if (unlikely(skb == NULL)) {
+        return 0;
+    }
+    iph = ip_hdr(skb);
+    if (unlikely(!iph || iph->version != 4 || iph->protocol != IPPROTO_TCP)) {
+        return 0;
+    }
+    tcph = tcp_hdr(skb);
+    if (unlikely(tcph == NULL)) {
+        return 0;
+    }
+
+    key[0] = (__force u32)iph->saddr;
+    key[1] = (__force u32)iph->daddr;
+    src_port = tcph->source;
+    dst_port = tcph->dest;
+    key[2] = (__force u16)src_port;
+    key[2] = (key[2]<<16)|(__force u16)dst_port;
+
+    hash = jhash2(key, 3, 0);
+    return hash & (HASHTABLE_SIZE-1);
+}
+static inline void update_congestion(struct dfb_sched_data *q, struct sk_buff *skb)
+{
+    u32 hash_value = 0;
+    struct sock *sk = NULL;
+    struct iphdr *iph = NULL;
+    struct tcphdr *tcph = NULL;
+    struct inet_connection_sock *icsk = NULL;
+    if (unlikely(skb == NULL)) {
+        return ;
+    }
+    sk = skb->sk;
+    if (unlikely(sk == NULL)) {
+        return ;
+    }
+    iph = ip_hdr(skb);
+    if (unlikely(!iph || iph->version != 4 || iph->protocol != IPPROTO_TCP)) {
+        return ;
+    }
+    tcph = tcp_hdr(skb);
+    icsk = inet_csk(sk);
+    if (unlikely(tcph == NULL || icsk == NULL)) {
+        return ;
+    }
+    if ((int)sk->sk_pacing_rate<=0) {
+        return ;
+    }
+
+    if(icsk->icsk_ca_state > TCP_CA_Disorder) {
+        hash_value = flow_hash(skb);
+        if(q->hash_table[hash_value] == 0) {
+            q->cong_rate += sk->sk_pacing_rate;
+            q->n_cong_flows ++;
+            q->deq_rst = 1;
+        }
+        q->hash_table[hash_value] = 1;
+    }
+    if(tcph->fin || tcph->rst) {
+        hash_value = flow_hash(skb);
+        if(q->hash_table[hash_value] == 1) {
+            q->cong_rate -= sk->sk_pacing_rate;
+            q->n_cong_flows --;
+            if(q->n_cong_flows == 0) q->cong_rate = 0;  // handle hash collision when hash table is empty
+            q->deq_rst = 1;
+        }
+        q->hash_table[hash_value] = 0;
+    }
+}
+static inline u8 query_congestion(struct dfb_sched_data *q, struct sk_buff *skb)
+{
+    u32 hash_value = 0;
+    struct iphdr *iph = NULL;
+    struct tcphdr *tcph = NULL;
+    if (unlikely(skb == NULL)) {
+        return 0;
+    }
+    iph = ip_hdr(skb);
+    if (unlikely(!iph || iph->version != 4 || iph->protocol != IPPROTO_TCP)) {
+        return 0;
+    }
+    tcph = tcp_hdr(skb);
+    if (unlikely(tcph == NULL)) {
+        return 0;
+    }
+
+    hash_value = flow_hash(skb);
+    return q->hash_table[hash_value];
 }
 
 static inline u64* dfb_get_prev_ts(struct sock *sk) {
@@ -315,7 +421,10 @@ static int dfb_segment(struct sk_buff *skb, struct Qdisc *sch,
         return qdisc_drop(skb, sch, to_free);
     }
 
-    qid = dfb_find_queue_index(rate);
+    if(query_congestion(q,skb))
+        qid = dfb_find_queue_index(q->cong_rate);
+    else
+        qid = dfb_find_queue_index(rate);
     q->highest_rate_qid = min_t(u8, q->highest_rate_qid, qid);
     nb = 0;
     while (segs) {
@@ -375,12 +484,16 @@ static int dfb_enqueue(struct sk_buff *skb, struct Qdisc *sch,
             skb->len, rate / MILLION, rate % MILLION
         );
 #endif
+        update_congestion(q,skb);
         // skb->skb_mstamp_ns = max_t(u64, *prev_ts, skb->skb_mstamp_ns);
         if (gso_split && skb_is_gso(skb)) {
             ret = dfb_segment(skb, sch, to_free);
             goto dfb_enqueue_done;
         }
-        qid = dfb_find_queue_index(rate);
+        if(query_congestion(q,skb))
+            qid = dfb_find_queue_index(q->cong_rate);
+        else
+            qid = dfb_find_queue_index(rate);
         q->highest_rate_qid = min_t(u8, q->highest_rate_qid, qid);
         dfb_enqueue_to_cq(q, skb, qid);
         // *prev_ts = skb->skb_mstamp_ns;
@@ -518,6 +631,23 @@ static struct sk_buff *dfb_dequeue(struct Qdisc *sch)
 #endif
     qdisc_watchdog_schedule_ns(&q->watchdog, next_time);
 dfb_dequeue_done:
+    if(skb&&q->hash_table[flow_hash(skb)]){
+        if(q->deq_rst){
+            q->deq_rst = 0;
+            q->deq_cnt = 0;
+            q->deq_time = ktime_get_ns();
+        }
+        else {
+            q->deq_cnt++;
+            if(q->deq_cnt==50) {
+                u64 t_time = ktime_get_ns();
+                u64 t_rate = div64_ul(50*1500*NSEC_PER_SEC,t_time-q->deq_time);
+                q->cong_rate = (3*q->cong_rate+t_rate)/4;
+                q->deq_cnt = 0;
+                q->deq_time = t_time;
+            }
+        }
+    }
 #if DFB_PROFILE
     n_tscs = rdtsc() - n_tscs;
     q->dequeue_cycles += n_tscs;
@@ -545,6 +675,7 @@ static int dfb_init(struct Qdisc *sch, struct nlattr *opt,
 {
     struct dfb_sched_data *q = qdisc_priv(sch);
     u8 qid = 0;
+    u32 fid = 0;
     u64 bid = 0;
 
     /*This allows bulk dequeue: https://lwn.net/Articles/615240/*/
@@ -572,6 +703,13 @@ static int dfb_init(struct Qdisc *sch, struct nlattr *opt,
             q->real_qid_cache[qid][bid] = \
                 qid + (bid ? __ffs(bid) : BUCKET_NUM_SCALE);
         }
+    }
+    q->deq_cnt = 0;
+    q->deq_rst = 1;
+    q->cong_rate = 0;
+    q->n_cong_flows = 0;
+    for (fid = 0; fid < HASHTABLE_SIZE; fid++) {
+        q->hash_table[fid] = 0;
     }
     qdisc_watchdog_init(&q->watchdog, sch);
     return 0;
