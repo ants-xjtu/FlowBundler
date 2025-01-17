@@ -641,8 +641,8 @@ dfb_dequeue_done:
             q->deq_cnt++;
             if(q->deq_cnt==50) {
                 u64 t_time = ktime_get_ns();
-                u64 t_rate = div64_ul(50*1500*NSEC_PER_SEC,t_time-q->deq_time);
-                q->cong_rate = (3*q->cong_rate+t_rate)/4;
+                u64 t_rate = div64_ul(50 *1500 * NSEC_PER_SEC, t_time-q->deq_time);
+                q->cong_rate = (3 * q->cong_rate + t_rate) / 4;
                 q->deq_cnt = 0;
                 q->deq_time = t_time;
             }
