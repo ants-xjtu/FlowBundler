@@ -2,6 +2,7 @@
  * DFB: Different flows in one burst
  */
 
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/init.h>
@@ -19,6 +20,9 @@
 #include <net/netlink.h>
 #include <net/sch_generic.h>
 #include <net/pkt_sched.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,10)
+#include <net/gso.h>
+#endif
 
 #define DFB_DEBUG 0
 #define DFB_PROFILE 0
